@@ -1,0 +1,18 @@
+igbp_id,igbp_name,train_label
+1,Evergreen Needleleaf Forest,0
+2,Evergreen Broadleaf Forest,1
+3,Deciduous Needleleaf Forest,255
+4,Deciduous Broadleaf Forest,2
+5,Mixed Forest,3
+6,Closed Shrublands,4
+7,Open Shrublands,5
+8,Woody Savannas,6
+9,Savannas,7
+10,Grasslands,8
+11,Permanent Wetlands,9
+12,Croplands,10
+13,Urban/Built-up,11
+14,Cropland/Natural Vegetation Mosaic,12
+15,Snow & Ice,255
+16,Barren,13
+17,Water,14

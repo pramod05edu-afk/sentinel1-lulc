@@ -1,0 +1,40 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# ---- Model weights & large data (hosted on Google Drive, see README) ----
+*.pth
+*.pt
+*.npy
+*.npz
+
+# ---- Regenerable intermediates (rebuilt by data_preparation/ scripts) ----
+index.parquet
+subset_index.csv
+sen12ms_subset/
+D:/DATA/
+
+# ---- Packaging / build artifacts ----
+*.zip
+submission/
+build_docx.js
+
+# ---- Report working files (keep only the final report.pdf) ----
+report_academic.docx
+report_academic_backup.docx
+report_academic_modern.docx
+report_final.docx
+
+# ---- Gradio runtime ----
+.gradio/
+outputs/
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

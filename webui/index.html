@@ -1,0 +1,451 @@
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Sentinel-1 LULC Explorer</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: cinematic radar-screen console — fixed hero, centered max-width console below */
+  :root{
+    --bg:#060910; --panel:#0c1322; --panel-2:#111b30; --border:#1d2b45;
+    --fg:#e8eef8; --muted:#8aa0c2; --faint:#5b6f90;
+    --accent:#2fe6c8; --accent-2:#4aa8ff; --warn:#ffb74d; --crit:#ff5d6c;
+    --radius:14px;
+    --f-display:"Chakra Petch",system-ui,sans-serif;
+    --f-body:"IBM Plex Sans",system-ui,sans-serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,monospace;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--fg);font-family:var(--f-body);line-height:1.5;
+    background-image:radial-gradient(1200px 600px at 70% -10%,rgba(47,230,200,.10),transparent 60%),
+                     radial-gradient(900px 500px at 0% 20%,rgba(74,168,255,.08),transparent 55%);}
+  .wrap{max-width:1120px;margin:0 auto;
+    padding-left:max(16px,env(safe-area-inset-left,0px));
+    padding-right:max(16px,env(safe-area-inset-right,0px));}
+  h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;font-weight:600;letter-spacing:.01em}
+  .eyebrow{font-family:var(--f-mono);text-transform:uppercase;letter-spacing:.22em;font-size:12px;color:var(--accent)}
+  .muted{color:var(--muted)} .faint{color:var(--faint)}
+  button{font-family:var(--f-display);cursor:pointer}
+  canvas{display:block}
+
+  /* ---------- hero ---------- */
+  .hero{position:relative;overflow:hidden;border-bottom:1px solid var(--border)}
+  #stars{position:absolute;inset:0;width:100%;height:100%;z-index:0}
+  .sweep{position:absolute;top:-30%;right:-10%;width:520px;height:520px;max-width:90vw;max-height:90vw;
+    border-radius:50%;z-index:0;opacity:.5;
+    background:conic-gradient(from 0deg,transparent 0 78%,rgba(47,230,200,.55) 92%,transparent 100%);
+    -webkit-mask:radial-gradient(circle,transparent 0,#000 1px);mask:radial-gradient(circle,transparent 0,#000 1px);
+    animation:spin 7s linear infinite}
+  .ring{position:absolute;top:-30%;right:-10%;width:520px;height:520px;max-width:90vw;max-height:90vw;border-radius:50%;z-index:0;
+    border:1px solid rgba(47,230,200,.18);box-shadow:inset 0 0 0 120px rgba(47,230,200,.03)}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .hero-in{position:relative;z-index:1;padding-block:clamp(48px,9vw,96px)}
+  .hero h1{font-size:clamp(34px,7vw,68px);font-weight:700;line-height:1.02;letter-spacing:.005em}
+  .hero h1 .grad{background:linear-gradient(100deg,var(--accent),var(--accent-2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .word{display:inline-block;opacity:0;transform:translateY(18px);animation:rise .7s cubic-bezier(.2,.7,.2,1) forwards}
+  @keyframes rise{to{opacity:1;transform:none}}
+  .lead{max-width:60ch;margin-top:18px;font-size:clamp(15px,1.8vw,18px);color:var(--muted);
+    opacity:0;animation:rise .7s ease .55s forwards}
+  .chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px;opacity:0;animation:rise .7s ease .7s forwards}
+  .chip{font-family:var(--f-mono);font-size:12.5px;color:var(--fg);background:rgba(255,255,255,.03);
+    border:1px solid var(--border);border-radius:999px;padding:6px 12px}
+  .chip b{color:var(--accent);font-weight:500}
+
+  /* ---------- console ---------- */
+  .console{padding-block:clamp(28px,5vw,46px);display:grid;gap:22px}
+  .panel{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--border);
+    border-radius:var(--radius);padding:20px}
+  .panel-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+  .panel-h h2{font-size:19px}
+  .panel-h .tag{font-family:var(--f-mono);font-size:11.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.14em}
+
+  /* controls */
+  .controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;align-items:end}
+  .field{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .field label{font-family:var(--f-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .field input,.field select{font-family:var(--f-mono);background:#070d18;border:1px solid var(--border);color:var(--fg);
+    border-radius:9px;padding:10px 12px;font-size:14px;width:100%}
+  .field input:focus,.field select:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+  .go{grid-column:1/-1;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .btn{background:linear-gradient(100deg,var(--accent),var(--accent-2));color:#042019;border:none;
+    border-radius:10px;padding:12px 22px;font-size:15px;font-weight:600;letter-spacing:.02em;
+    transition:transform .12s ease,box-shadow .2s ease;box-shadow:0 6px 24px rgba(47,230,200,.25)}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 10px 30px rgba(47,230,200,.35)}
+  .btn:active{transform:translateY(0)}
+  .presets{display:flex;gap:8px;flex-wrap:wrap}
+  .preset{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:999px;padding:7px 13px;font-size:12.5px;font-family:var(--f-mono)}
+  .preset:hover{color:var(--fg);border-color:var(--accent)}
+  .note{font-size:12.5px;color:var(--faint);font-family:var(--f-mono)}
+
+  /* maps grid */
+  .grid12{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  @media(max-width:760px){.grid12{grid-template-columns:repeat(2,1fr)}}
+  .tile{position:relative;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:#05070d;
+    aspect-ratio:1;cursor:pointer;opacity:0;transform:scale(.96);transition:border-color .15s ease,box-shadow .15s ease}
+  .tile.in{animation:pop .5s cubic-bezier(.2,.7,.2,1) forwards}
+  @keyframes pop{to{opacity:1;transform:none}}
+  .tile canvas{width:100%;height:100%;image-rendering:pixelated}
+  .tile .mlabel{position:absolute;left:0;right:0;bottom:0;font-family:var(--f-mono);font-size:11px;
+    padding:4px 7px;background:linear-gradient(0deg,rgba(4,8,16,.88),transparent);color:var(--fg);letter-spacing:.04em}
+  .tile.sel{border-color:var(--accent);box-shadow:0 0 0 2px rgba(47,230,200,.4)}
+  .tile:hover{border-color:var(--accent-2)}
+
+  /* two-column results */
+  .cols{display:grid;grid-template-columns:1.5fr 1fr;gap:22px}
+  @media(max-width:860px){.cols{grid-template-columns:1fr}}
+
+  /* legend */
+  .legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:7px 14px}
+  .lg{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);min-width:0}
+  .lg .sw{width:13px;height:13px;border-radius:3px;flex:0 0 auto;border:1px solid rgba(255,255,255,.12)}
+  .lg span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lg.on{color:var(--fg)}
+
+  /* chart */
+  .chart-wrap{position:relative}
+  #chart{width:100%;height:auto;display:block}
+  .clip-reveal{animation:wipe 1.1s ease forwards}
+  @keyframes wipe{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+
+  /* stat tiles */
+  .stats{display:grid;grid-template-columns:1fr;gap:10px}
+  .stat{display:flex;align-items:center;gap:12px;background:#070d18;border:1px solid var(--border);border-radius:10px;padding:11px 13px}
+  .stat .sw{width:11px;height:26px;border-radius:3px;flex:0 0 auto}
+  .stat .nm{flex:1;min-width:0;font-size:13.5px}
+  .stat .nm span{display:block;color:var(--faint);font-size:11px;font-family:var(--f-mono)}
+  .stat .val{font-family:var(--f-mono);font-size:16px;font-variant-numeric:tabular-nums}
+  .up{color:var(--accent)} .down{color:var(--crit)}
+
+  /* month detail bars */
+  .bars{display:flex;flex-direction:column;gap:7px}
+  .bar{display:grid;grid-template-columns:120px 1fr 54px;align-items:center;gap:10px;font-size:12.5px}
+  @media(max-width:520px){.bar{grid-template-columns:92px 1fr 48px}}
+  .bar .bn{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar .track{height:9px;background:#070d18;border-radius:6px;overflow:hidden;border:1px solid var(--border)}
+  .bar .fill{height:100%;border-radius:6px;transition:width .6s cubic-bezier(.2,.7,.2,1)}
+  .bar .bv{font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums;color:var(--fg)}
+
+  /* comparison */
+  .cmp{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+  @media(max-width:520px){.cmp{grid-template-columns:1fr}}
+  .cmp .mp{border:1px solid var(--border);border-radius:10px;overflow:hidden;line-height:0}
+  .cmp .mp canvas{width:100%;height:auto;display:block;image-rendering:pixelated}
+  .cmp .cap{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);text-align:center;margin-top:6px;text-transform:uppercase;letter-spacing:.1em}
+  .agree{font-family:var(--f-mono);font-size:28px;color:var(--accent);font-variant-numeric:tabular-nums}
+
+  footer{border-top:1px solid var(--border);padding-block:26px;margin-top:10px;color:var(--faint);font-size:13px}
+  footer code{font-family:var(--f-mono);color:var(--muted)}
+  .hide{display:none}
+  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.word,.lead,.chips,.tile{opacity:1!important;transform:none!important}}
+</style>
+
+<div class="hero">
+  <canvas id="stars"></canvas>
+  <div class="ring"></div><div class="sweep"></div>
+  <div class="wrap hero-in">
+    <div class="eyebrow">Predictive Analytics &amp; Deep Learning · SAR Remote Sensing</div>
+    <h1 id="title"></h1>
+    <p class="lead">Land-use / land-cover segmentation driven by <b style="color:var(--fg)">Sentinel-1 radar only</b> — no optical bands. Enter a location and a start month to map 12 monthly LULC composites, track how each class shifts, and cross-check against an independent reference.</p>
+    <div class="chips">
+      <div class="chip"><b>2</b> input bands · VV / VH dB</div>
+      <div class="chip"><b>15</b> IGBP classes</div>
+      <div class="chip"><b>12</b> monthly maps</div>
+      <div class="chip"><b>Δ</b> change in percentage points</div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap console">
+
+  <section class="panel">
+    <div class="panel-h"><h2>Acquisition</h2><div class="tag">lat / lon · start month · window</div></div>
+    <div class="controls">
+      <div class="field"><label for="lat">Latitude</label><input id="lat" type="number" step="0.0001" value="48.1372"></div>
+      <div class="field"><label for="lon">Longitude</label><input id="lon" type="number" step="0.0001" value="11.5756"></div>
+      <div class="field"><label for="month">Start month</label>
+        <select id="month"></select></div>
+      <div class="field"><label for="year">Year</label>
+        <select id="year"></select></div>
+      <div class="field"><label for="size">Window</label>
+        <select id="size">
+          <option value="2">5.1 km</option>
+          <option value="3">7.7 km</option>
+          <option value="4">10.2 km</option>
+        </select></div>
+      <div class="go">
+        <button class="btn" id="run">Generate 12-month analysis</button>
+        <div class="presets">
+          <button class="preset" data-lat="48.1372" data-lon="11.5756">Munich · urban</button>
+          <button class="preset" data-lat="52.3738" data-lon="4.8910">Amsterdam · water</button>
+          <button class="preset" data-lat="37.9838" data-lon="23.7275">Athens · coastal</button>
+        </div>
+      </div>
+    </div>
+    <p class="note" style="margin-top:14px">Demo runs on spatially-coherent <b>sample</b> fields generated in-browser from your inputs — the real system feeds Google Earth Engine Sentinel-1 composites to the trained model. Numbers below are illustrative.</p>
+  </section>
+
+  <section class="panel" id="mapsPanel">
+    <div class="panel-h"><h2>Monthly LULC maps</h2><div class="tag" id="mapsTag">—</div></div>
+    <div class="grid12" id="grid"></div>
+    <div style="margin-top:16px" class="legend" id="legend"></div>
+  </section>
+
+  <div class="cols">
+    <section class="panel">
+      <div class="panel-h"><h2>Class share over 12 months</h2><div class="tag">% of mapped area</div></div>
+      <div class="chart-wrap"><svg id="chart" viewBox="0 0 640 320" preserveAspectRatio="xMidYMid meet"></svg></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-h"><h2 id="detailH">Month detail</h2><div class="tag" id="detailTag">click a map</div></div>
+      <div class="bars" id="bars"></div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <div class="panel-h"><h2>Total change · first → last month</h2><div class="tag">percentage points</div></div>
+    <div class="stats" id="stats"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-h"><h2>Sanity check vs reference map</h2><div class="tag">month 1 · super-classes</div></div>
+    <div class="cmp">
+      <div><div class="mp"><canvas id="cmpModel" width="128" height="128"></canvas></div><div class="cap">Model (S1)</div></div>
+      <div><div class="mp"><canvas id="cmpRef" width="128" height="128"></canvas></div><div class="cap">Reference LULC</div></div>
+    </div>
+    <p style="margin-top:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <span class="agree" id="agree">—</span>
+      <span class="muted" style="max-width:52ch;font-size:13.5px">overall super-class pixel agreement. In the real prototype the reference is <b style="color:var(--fg)">ESA WorldCover</b>, never used in training; disagreement reflects taxonomy and acquisition-date differences as much as model error.</span>
+    </p>
+  </section>
+
+  <footer class="wrap" style="padding-left:0;padding-right:0">
+    <b style="color:var(--muted);font-family:var(--f-display)">Sentinel-1 LULC Explorer</b> — front-end demo for the Data Analytics 3 prototype.
+    Wire to the backend by replacing the in-browser generator with calls to <code>gee_fetch.py</code> → <code>model_infer.py</code>.
+    Class scheme: simplified IGBP (15 classes). Sample data only.
+  </footer>
+</div>
+
+<script>
+/* ---------------- class scheme (matches training labels 0..14) ---------------- */
+const CLASSES=[
+ {n:"Evergreen Needleleaf F.",c:"#006400"},{n:"Evergreen Broadleaf F.",c:"#228B22"},
+ {n:"Deciduous Broadleaf F.",c:"#32CD32"},{n:"Mixed Forest",c:"#6B8E23"},
+ {n:"Closed Shrublands",c:"#BDB76B"},{n:"Open Shrublands",c:"#D2B48C"},
+ {n:"Woody Savannas",c:"#808000"},{n:"Savannas",c:"#BDC25B"},
+ {n:"Grasslands",c:"#9ACD32"},{n:"Permanent Wetlands",c:"#00CED1"},
+ {n:"Croplands",c:"#FFD700"},{n:"Urban / Built-up",c:"#E31A1C"},
+ {n:"Cropland / Nat.Veg.",c:"#FFA500"},{n:"Barren",c:"#DEB887"},{n:"Water",c:"#1F78B4"}];
+const SUPER=["Forest","Shrubland","Grassland","Cropland","Urban","Barren","Wetland","Water"];
+const SUPER_C=["#228B22","#BDB76B","#9ACD32","#FFD700","#E31A1C","#DEB887","#00CED1","#1F78B4"];
+const L2S=[0,0,0,0,1,1,2,2,2,6,3,4,3,5,7];
+const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const DIM=64; // sample tile resolution
+
+/* ---------------- seeded RNG + value noise ---------------- */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function noiseField(rng,grid){ // grid x grid lattice of randoms
+  const g=[];for(let i=0;i<=grid;i++){g[i]=[];for(let j=0;j<=grid;j++)g[i][j]=rng()}
+  return function(x,y){ // x,y in [0,1]
+    const fx=x*grid,fy=y*grid,x0=Math.floor(fx),y0=Math.floor(fy),tx=fx-x0,ty=fy-y0;
+    const s=t=>t*t*(3-2*t);const u=s(tx),v=s(ty);
+    const a=g[x0][y0],b=g[x0+1][y0],c=g[x0][y0+1],d=g[x0+1][y0+1];
+    return a*(1-u)*(1-v)+b*u*(1-v)+c*(1-u)*v+d*u*v;
+  };
+}
+
+/* ---------------- location model ---------------- */
+let MODEL=null;
+function buildModel(lat,lon){
+  const seed=Math.floor((Math.abs(lat)*1000+Math.abs(lon)*7777))>>>0;
+  const rng=mulberry32(seed);
+  // pick a palette of classes plausible for a mid-latitude scene + always urban core + water
+  const base=[8,10,3,2,13,5]; // grassland,cropland,mixedforest,decidforest,barren,openshrub
+  const nBase=3+Math.floor(rng()*3);
+  const present=[];for(let i=0;i<nBase;i++){const k=base[Math.floor(rng()*base.length)];if(!present.includes(k))present.push(k)}
+  if(!present.includes(10))present.push(10); // cropland (seasonal driver)
+  if(!present.includes(8))present.push(8);   // grassland
+  present.push(11); // urban
+  present.push(14); // water
+  return {seed,rng,present,
+    f1:noiseField(mulberry32(seed+1),6),
+    f2:noiseField(mulberry32(seed+2),10),
+    urbX:0.35+rng()*0.3,urbY:0.35+rng()*0.3,urbR:0.14+rng()*0.1,
+    rivPhase:rng()*6.28,rivAmp:0.08+rng()*0.1};
+}
+
+/* label a month: returns Uint8Array DIM*DIM */
+function genMonth(m){
+  const M=MODEL,arr=new Uint8Array(DIM*DIM);
+  // seasonal: cropland peaks mid-year, grassland anti-phase, slight water change
+  const seas=Math.sin((m/12)*6.283 - 1.2); // -1..1
+  const cropBias=0.16*seas, waterBias=0.03*Math.sin((m/12)*6.283);
+  for(let y=0;y<DIM;y++)for(let x=0;x<DIM;x++){
+    const u=x/DIM,v=y/DIM;
+    const a=M.f1(u,v),b=M.f2(u,v);
+    let cls;
+    // river: sinusoidal channel
+    const river=Math.abs(v-(0.5+M.rivAmp*Math.sin(u*6.283+M.rivPhase)));
+    const dUrb=Math.hypot(u-M.urbX,v-M.urbY);
+    if(river<0.045+waterBias) cls=14;                        // water
+    else if(dUrb<M.urbR*(1+0.05*Math.sin(m))) cls=11;        // urban core
+    else{
+      const field=a*0.65+b*0.35+cropBias*(b>0.5?1:-0.4);
+      const p=M.present.filter(k=>k!==14&&k!==11);
+      // map field -> one of the present natural classes via thresholds
+      const idx=Math.min(p.length-1,Math.max(0,Math.floor(field*p.length)));
+      cls=p[idx];
+      // sprinkle barren/edge
+      if(b>0.86&&M.present.includes(13))cls=13;
+    }
+    arr[y*DIM+x]=cls;
+  }
+  return arr;
+}
+
+/* ---------------- rendering ---------------- */
+function paint(canvas,arr,mapFn){
+  const ctx=canvas.getContext('2d');const img=ctx.createImageData(DIM,DIM);
+  for(let i=0;i<arr.length;i++){
+    const hex=mapFn(arr[i]);const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+    img.data[i*4]=r;img.data[i*4+1]=g;img.data[i*4+2]=b;img.data[i*4+3]=255;
+  }
+  ctx.putImageData(img,0,0);
+}
+const clsColor=k=>CLASSES[k].c;
+const supColor=k=>SUPER_C[k];
+
+/* percentages per month -> [12][15] */
+function percentages(maps){
+  return maps.map(a=>{const c=new Array(15).fill(0);for(const v of a)c[v]++;return c.map(n=>100*n/a.length)});
+}
+
+let MAPS=[],PCT=[],PRESENT=[];
+function run(){
+  const lat=parseFloat(lat_.value),lon=parseFloat(lon_.value);
+  const mo=parseInt(month_.value),yr=parseInt(year_.value),sz=parseInt(size_.value);
+  MODEL=buildModel(lat,lon);
+  MAPS=[];for(let i=0;i<12;i++)MAPS.push(genMonth((mo+i)%12));
+  PCT=percentages(MAPS);
+  // classes actually present (avg share > 0.3%)
+  const avg=new Array(15).fill(0);PCT.forEach(p=>p.forEach((v,k)=>avg[k]+=v/12));
+  PRESENT=avg.map((v,k)=>[k,v]).filter(d=>d[1]>0.3).sort((a,b)=>b[1]-a[1]).map(d=>d[0]);
+  document.getElementById('mapsTag').textContent=`${(sz*2.56).toFixed(1)} km · ${MONTHS[mo]} ${yr} → ${MONTHS[(mo+11)%12]} ${(mo+11)>11?yr+1:yr}`;
+  renderGrid(mo,yr);renderLegend();renderChart(mo);renderStats();renderCompare();
+  selectMonth(0,mo,yr);
+}
+
+function renderGrid(mo,yr){
+  const g=document.getElementById('grid');g.innerHTML='';
+  MAPS.forEach((a,i)=>{
+    const d=document.createElement('div');d.className='tile';d.style.animationDelay=(i*55)+'ms';
+    const cv=document.createElement('canvas');cv.width=DIM;cv.height=DIM;
+    const lab=document.createElement('div');lab.className='mlabel';
+    const mm=(mo+i)%12,yy=(mo+i)>11?yr+1:yr;lab.textContent=`${MONTHS[mm]} ${String(yy).slice(2)}`;
+    d.appendChild(cv);d.appendChild(lab);g.appendChild(d);
+    paint(cv,a,clsColor);
+    requestAnimationFrame(()=>d.classList.add('in'));
+    d.addEventListener('click',()=>selectMonth(i,mo,yr));
+  });
+}
+function renderLegend(){
+  const L=document.getElementById('legend');L.innerHTML='';
+  CLASSES.forEach((c,k)=>{
+    const on=PRESENT.includes(k);
+    const el=document.createElement('div');el.className='lg'+(on?' on':'');
+    el.innerHTML=`<span class="sw" style="background:${c.c};opacity:${on?1:.3}"></span><span>${c.n}</span>`;
+    L.appendChild(el);
+  });
+}
+
+function renderChart(mo){
+  const svg=document.getElementById('chart');const W=640,H=320,PX=44,PB=34,PT=12,PR=12;
+  const iw=W-PX-PR,ih=H-PB-PT;svg.innerHTML='';
+  const NS='http://www.w3.org/2000/svg';
+  const add=(t,at)=>{const e=document.createElementNS(NS,t);for(const k in at)e.setAttribute(k,at[k]);svg.appendChild(e);return e};
+  // grid + y labels
+  for(let p=0;p<=100;p+=25){const y=PT+ih*(1-p/100);
+    add('line',{x1:PX,y1:y,x2:W-PR,y2:y,stroke:'#1d2b45','stroke-width':1});
+    const t=add('text',{x:PX-8,y:y+4,fill:'#5b6f90','font-size':11,'text-anchor':'end','font-family':'IBM Plex Mono'});t.textContent=p+'%';}
+  // x labels
+  MAPS.forEach((_,i)=>{const x=PX+iw*(i/11);
+    const t=add('text',{x,y:H-12,fill:'#5b6f90','font-size':10,'text-anchor':'middle','font-family':'IBM Plex Mono'});t.textContent=MONTHS[(mo+i)%12][0]});
+  // stacked areas for present classes (top = largest first for stable base)
+  const order=[...PRESENT];
+  const cum=MAPS.map(()=>0);
+  const grp=add('g',{});grp.classList.add('clip-reveal');
+  order.forEach(k=>{
+    let up='',down='';
+    for(let i=0;i<12;i++){const x=PX+iw*(i/11);const y0=PT+ih*(1-cum[i]/100);up+=(i?' L':'M')+x+' '+y0}
+    for(let i=11;i>=0;i--){const x=PX+iw*(i/11);cum[i]+=PCT[i][k];const y1=PT+ih*(1-cum[i]/100);down+=' L'+x+' '+y1}
+    const e=document.createElementNS(NS,'path');e.setAttribute('d',up+down+' Z');
+    e.setAttribute('fill',CLASSES[k].c);e.setAttribute('opacity','.9');e.setAttribute('stroke','#060910');e.setAttribute('stroke-width','.5');
+    grp.appendChild(e);
+  });
+}
+
+function renderStats(){
+  const box=document.getElementById('stats');box.innerHTML='';
+  const deltas=PRESENT.map(k=>[k,PCT[11][k]-PCT[0][k]]).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
+  deltas.slice(0,6).forEach(([k,d])=>{
+    const el=document.createElement('div');el.className='stat';
+    const dir=d>=0?'up':'down';const sign=d>=0?'+':'';
+    el.innerHTML=`<span class="sw" style="background:${CLASSES[k].c}"></span>
+      <div class="nm">${CLASSES[k].n}<span>${PCT[0][k].toFixed(1)}% → ${PCT[11][k].toFixed(1)}%</span></div>
+      <div class="val ${dir}">${sign}${d.toFixed(2)} pp</div>`;
+    box.appendChild(el);
+  });
+}
+
+function selectMonth(i,mo,yr){
+  document.querySelectorAll('.tile').forEach((t,j)=>t.classList.toggle('sel',j===i));
+  const mm=(mo+i)%12,yy=(mo+i)>11?yr+1:yr;
+  document.getElementById('detailH').textContent=`${MONTHS[mm]} ${yy}`;
+  document.getElementById('detailTag').textContent=`month ${i+1} of 12`;
+  const bars=document.getElementById('bars');bars.innerHTML='';
+  const rows=PRESENT.map(k=>[k,PCT[i][k]]).sort((a,b)=>b[1]-a[1]);
+  rows.forEach(([k,v])=>{
+    const el=document.createElement('div');el.className='bar';
+    el.innerHTML=`<div class="bn">${CLASSES[k].n}</div><div class="track"><div class="fill" style="width:0;background:${CLASSES[k].c}"></div></div><div class="bv">${v.toFixed(1)}%</div>`;
+    bars.appendChild(el);requestAnimationFrame(()=>el.querySelector('.fill').style.width=Math.min(100,v)+'%');
+  });
+}
+
+function renderCompare(){
+  const m0=MAPS[0];
+  const modelS=new Uint8Array(m0.length),refS=new Uint8Array(m0.length);
+  const rng=mulberry32(MODEL.seed+99);let agree=0;
+  for(let i=0;i<m0.length;i++){const s=L2S[m0[i]];modelS[i]=s;
+    // reference = model super-class with ~16% plausible disagreement to a neighbour
+    let r=s;if(rng()<0.16){r=L2S[MODEL.present[Math.floor(rng()*MODEL.present.length)]]}
+    refS[i]=r;if(r===s)agree++;
+  }
+  paint(document.getElementById('cmpModel'),modelS,supColor);
+  paint(document.getElementById('cmpRef'),refS,supColor);
+  document.getElementById('agree').textContent=(100*agree/m0.length).toFixed(1)+'%';
+}
+
+/* ---------------- hero + init ---------------- */
+const lat_=document.getElementById('lat'),lon_=document.getElementById('lon'),
+      month_=document.getElementById('month'),year_=document.getElementById('year'),size_=document.getElementById('size');
+MONTHS.forEach((m,i)=>{const o=document.createElement('option');o.value=i;o.textContent=m;month_.appendChild(o)});
+for(let y=2024;y>=2017;y--){const o=document.createElement('option');o.value=y;o.textContent=y;year_.appendChild(o)}
+month_.value=0;year_.value=2023;
+
+// kinetic title
+(function(){const t=document.getElementById('title');const parts=[["SENTINEL-1",""],["LULC"," grad"],["EXPLORER",""]];
+ parts.forEach((p,i)=>{const w=document.createElement('span');w.className='word'+(p[1]?' '+p[1]:'');w.textContent=p[0];
+   w.style.animationDelay=(0.15+i*0.13)+'s';t.appendChild(w);if(i<parts.length-1)t.appendChild(document.createTextNode(' '))});})();
+
+// starfield
+(function(){const cv=document.getElementById('stars');const ctx=cv.getContext('2d');let W,H,stars;
+ const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+ function size(){W=cv.width=cv.offsetWidth;H=cv.height=cv.offsetHeight;
+   stars=Array.from({length:Math.round(W*H/9000)},()=>({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.3+.2,a:Math.random()}))}
+ function draw(){ctx.clearRect(0,0,W,H);for(const s of stars){s.a+=0.015;const tw=0.4+0.6*(0.5+0.5*Math.sin(s.a));
+   ctx.fillStyle=`rgba(180,220,255,${tw*0.6})`;ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,6.28);ctx.fill()}
+   if(!reduce)requestAnimationFrame(draw)}
+ const ro=new ResizeObserver(size);ro.observe(cv);size();draw();})();
+
+document.getElementById('run').addEventListener('click',run);
+document.querySelectorAll('.preset').forEach(b=>b.addEventListener('click',()=>{lat_.value=b.dataset.lat;lon_.value=b.dataset.lon;run()}));
+run();
+</script>
