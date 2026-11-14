@@ -5,6 +5,9 @@ optical bands), plus a prototype that maps how land cover at any location change
 across twelve months. Course project for *Predictive Analytics and Deep Learning
 (Data Analytics 3)*, SRH Hochschule Heidelberg.
 
+**🚀 Live demo (interactive, runs in your browser):**
+https://pramod05edu-afk.github.io/sentinel1-lulc/webui/
+
 ## Results (test set)
 
 | Metric | 15 classes | 8 super-classes |
@@ -17,6 +20,10 @@ across twelve months. Course project for *Predictive Analytics and Deep Learning
 - U-Net (ResNet-34) outperformed a DeepLabV3+ baseline.
 - Munich case study agrees with ESA WorldCover (independent) on **58%** of pixels,
   matching the super-class test accuracy.
+
+![Twelve monthly LULC maps for Munich, 2023](figures/munich_maps.png)
+
+*Prototype output: twelve monthly Sentinel-1 LULC maps for Munich (urban in red, cropland yellow, grassland green, water blue).*
 
 ## Repository layout
 
