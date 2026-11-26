@@ -50,12 +50,19 @@ class LULCModel:
         return (x - mean) / std
 
     @torch.no_grad()
-    def predict(self, s1_db):
-        """(2,S,S) dB -> (S,S) uint8 label map; tiles into self.tile blocks.
+    def predict(self, s1_db, overlap=True):
+        """(2,S,S) dB -> (S,S) uint8 label map.
 
         Normalization statistics are computed once on the full scene, so every
-        tile shares them and there are no block seams.
+        tile shares them. With ``overlap=True`` (default) tiles overlap by half
+        and their softmax probabilities are blended with a centre-weighted
+        window: a pixel near one tile's border is decided mostly by the tile
+        that sees it in the middle. Non-overlapping tiling (``overlap=False``,
+        the original behaviour) leaves visible seams along tile edges, because
+        the network sees little context near a border.
         """
+        if overlap:
+            return self._predict_overlap(s1_db)
         _, H, W = s1_db.shape
         t = self.tile
         mean, std = self._scene_stats(s1_db)
@@ -70,6 +77,37 @@ class LULCModel:
                 pred = self.model(x).argmax(1)[0].cpu().numpy().astype(np.uint8)
                 out[r:r + t, c:c + t] = pred[:th, :tw]
         return out
+
+    @torch.no_grad()
+    def _predict_overlap(self, s1_db):
+        """Sliding-window inference, stride = tile/2, centre-weighted blending."""
+        _, H, W = s1_db.shape
+        t = self.tile
+        s = t // 2
+        mean, std = self._scene_stats(s1_db)
+        # Pad by half a tile on every side (plus up to the next stride multiple),
+        # so every real pixel lies in the central part of at least one window.
+        ph, pw = (-H) % s, (-W) % s
+        pad = ((0, 0), (s, s + ph), (s, s + pw))
+        mode = "reflect" if min(H, W) > s + max(ph, pw) else "edge"
+        x_full = np.pad(s1_db, pad, mode=mode)
+        PH, PW = x_full.shape[1], x_full.shape[2]
+
+        win = np.hanning(t + 2)[1:-1].astype(np.float32)     # strictly > 0
+        weight = torch.from_numpy(np.outer(win, win)).to(self.device)
+        acc = wsum = None
+        for r in range(0, PH - t + 1, s):
+            for c in range(0, PW - t + 1, s):
+                tile = x_full[:, r:r + t, c:c + t]
+                x = torch.from_numpy(self._to_input(tile, mean, std))[None].to(self.device)
+                prob = torch.softmax(self.model(x), 1)[0] * weight          # (C,t,t)
+                if acc is None:
+                    acc = torch.zeros((prob.shape[0], PH, PW), device=self.device)
+                    wsum = torch.zeros((PH, PW), device=self.device)
+                acc[:, r:r + t, c:c + t] += prob
+                wsum[r:r + t, c:c + t] += weight
+        labels = (acc / wsum.clamp_min(1e-8)).argmax(0)
+        return labels[s:s + H, s:s + W].cpu().numpy().astype(np.uint8)
 
     def predict_series(self, stack):
         """(12,2,S,S) -> (12,S,S) uint8 label maps."""
