@@ -5,7 +5,7 @@ optical bands), plus a prototype that maps how land cover at any location change
 across twelve months. Course project for *Predictive Analytics and Deep Learning
 (Data Analytics 3)*, SRH Hochschule Heidelberg.
 
-**🚀 Live demo (interactive, runs in your browser):**
+**🚀 Live demo: real model output for Munich and Mannheim, 2023 (runs in your browser):**
 https://pramod05edu-afk.github.io/sentinel1-lulc/webui/
 
 ## Results (test set)
@@ -18,8 +18,11 @@ https://pramod05edu-afk.github.io/sentinel1-lulc/webui/
 - Best classes: Urban/Built-up and Evergreen Broadleaf Forest (the classes radar
   separates best).
 - U-Net (ResNet-34) outperformed a DeepLabV3+ baseline.
-- Munich case study agrees with ESA WorldCover (independent) on **58%** of pixels,
-  matching the super-class test accuracy.
+- Munich case study agrees with ESA WorldCover (independent) on **57%** of pixels,
+  in line with the 58% super-class test accuracy. Mannheim reaches 38%: the city is
+  mapped well, but the Rhine and Neckar (a few hundred metres wide) fall below the
+  500 m resolution of the training labels. Forest and farmland scenes were weaker
+  still (about 30%), so the live demo shows the two city scenes only.
 
 ![Twelve monthly LULC maps for Munich, 2023](figures/munich_maps.png)
 
@@ -85,9 +88,10 @@ EE_PROJECT=YOUR_GCP_PROJECT WEIGHTS=path/to/best_unet_resnet34_v2.pth python pro
   `[VV, VH, VV-VH]` so an ImageNet-pretrained encoder can be used.
 - **Model:** U-Net (ResNet-34), class-weighted cross-entropy + Dice, gradient
   clipping, early stopping on validation mIoU.
-- **Prototype:** monthly Sentinel-1 median composites from Google Earth Engine, run
-  tile-by-tile with per-scene normalization (to bridge the SEN12MS-to-live domain
-  shift), then per-class area %, month-to-month and total change, and a sanity check
+- **Prototype:** monthly Sentinel-1 mean composites (averaged in linear power) from
+  Google Earth Engine, run with overlapping sliding-window tiles (half-tile stride,
+  centre-weighted blending, which removes seams at tile edges) and per-scene
+  normalization (to bridge the SEN12MS-to-live domain shift), then per-class area %, month-to-month and total change, and a sanity check
   against an independent LULC map.
 
 ## Limitations

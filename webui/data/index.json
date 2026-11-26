@@ -1,0 +1,18 @@
+[
+ {
+  "name": "munich",
+  "label": "Munich",
+  "kind": "urban",
+  "lat": 48.1372,
+  "lon": 11.5756,
+  "agreement": 0.5711
+ },
+ {
+  "name": "mannheim",
+  "label": "Mannheim",
+  "kind": "city + Rhine",
+  "lat": 49.4875,
+  "lon": 8.466,
+  "agreement": 0.3819
+ }
+]
